@@ -1,0 +1,21 @@
+fileFormatVersion: 2
+guid: 96d8b6c0dd2c4844f9df3d85c8d2dc07
+timeCreated: 1482453420
+licenseType: Free
+TrueTypeFontImporter:
+  serializedVersion: 4
+  fontSize: 16
+  forceTextureCase: -2
+  characterSpacing: 0
+  characterPadding: 1
+  includeFontData: 1
+  fontNames:
+  - Averia Sans
+  fallbackFontReferences:
+  - {fileID: 12800000, guid: 581240e3d2f0046479af73183c5ad39f, type: 3}
+  customCharacters: 
+  fontRenderingMode: 0
+  ascentCalculationMode: 1
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
