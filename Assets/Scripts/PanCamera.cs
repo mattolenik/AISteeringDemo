@@ -4,19 +4,28 @@ using UnityEngine;
 
 public class PanCamera : MonoBehaviour
 {
-    void Start()
-    {
-    }
+    public float MinY = 17f;
+    Vector3 pos;
+    float x;
+    float z;
+    float y;
 
     void Update()
     {
-        var x = Input.GetAxis("Mouse X") * Time.unscaledDeltaTime * -15f;
-        var z = Input.GetAxis("Mouse Y") * Time.unscaledDeltaTime * -15f;
-        var y = Input.GetAxis("Mouse ScrollWheel") * Time.unscaledDeltaTime * -500f;
+        x = Input.GetAxis("Mouse X") * Time.unscaledDeltaTime * -15f;
+        z = Input.GetAxis("Mouse Y") * Time.unscaledDeltaTime * -15f;
+        y = Input.GetAxis("Mouse ScrollWheel") * Time.unscaledDeltaTime * -500f;
+        pos = transform.position;
         if (Input.GetButton("Mouse1"))
         {
-            transform.position += new Vector3(x, 0, z);
+            transform.position += new Vector3(
+                Mathf.Abs(pos.x + x) > 25 ? 0 : x,
+                0,
+                Mathf.Abs(pos.z + z) > 25 ? 0 : z);
         }
-        transform.position += new Vector3(0, y, 0);
+        if (transform.position.y + y > MinY)
+        {
+            transform.position += new Vector3(0, y, 0);
+        }
     }
 }

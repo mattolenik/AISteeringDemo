@@ -95,7 +95,7 @@ public class Droid : MonoBehaviour
             Select(x => Instantiate(DotPrefab, transform.parent).GetComponent<Sprite>()).ToArray();
 
         // +1 for feeler scale input
-        inputs = new float[numFeelers + 1];
+        inputs = new float[numFeelers + 2];
         outputs = new float[3];
 
         brain = new NeuralNet(
@@ -118,8 +118,10 @@ public class Droid : MonoBehaviour
         var angle = Vector3.Dot(head.transform.right, Direction) * (Mathf.Rad2Deg * Time.fixedDeltaTime * 12f);
         head.rotation *= Quaternion.AngleAxis(angle, Vector3.forward);
 
+        var s = body.velocity.magnitude;
         // Learn stuff
-        inputs[inputs.Length - 1] = FeelerScale;
+        inputs[inputs.Length - 2] = FeelerScale;
+        inputs[inputs.Length - 1] = (float.IsNaN(s) || s > 1000 || s < -1000) ? 0f : s;
         brain.FeedForward(inputs, outputs, Tanh);
 
         // Outputs ranges from -1 to 1, scale to a range of 0.375 to 1.875
@@ -129,7 +131,10 @@ public class Droid : MonoBehaviour
         // Prevent buildup of momentum by applying less force the faster it moves
         var force = Vector3.ClampMagnitude(Direction * (outputs[1] * Speed), MaxSpeed);
         var corrected = force - body.velocity * body.velocity.magnitude;
-        body.AddForce(corrected, ForceMode.Impulse);
+        if (!float.IsNaN(corrected.magnitude))
+        {
+            body.AddForce(corrected, ForceMode.Impulse);
+        }
         CastFeelers();
     }
 
