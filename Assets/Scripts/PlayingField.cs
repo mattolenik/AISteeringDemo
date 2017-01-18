@@ -49,12 +49,4 @@ public class PlayingField : MonoBehaviour
             }
         }
     }
-
-    public void ClearMarkers()
-    {
-        foreach (var dot in markers)
-        {
-            dot.GetComponentInChildren<Collider>().enabled = true;
-        }
-    }
 }

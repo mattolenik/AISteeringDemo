@@ -2,16 +2,22 @@
 using System.Collections;
 using UnityEngine;
 using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Text;
+using Newtonsoft.Json;
 using PathfindingLib;
 using UnityEngine.UI;
 using Random = System.Random;
 
 public class Simulation : MonoBehaviour
 {
-    public Dropdown ImportList;
+    public Text GenerationCountLabel;
 
-    public float TimeScale = 5f;
+    public Text TimescaleLabel;
+
+    public Slider TimescaleSlider;
 
     [Tooltip("Starting generation lifespan in seconds")]
     public float StartingGenerationLength = 8;
@@ -41,53 +47,72 @@ public class Simulation : MonoBehaviour
     int deadDroids;
     Random rnd;
     Random aiRnd;
+    int generationCount;
+    string savePrefsKey = "saved_population";
 
     // Generation length function input (i.e. x-axis of its plot)
     float genLengthX;
 
-    IEnumerator Start()
+    void Start()
+    {
+        SetTimescale(TimescaleSlider.value);
+        NewSimulation();
+    }
+
+    void NewSimulation()
+    {
+        NewSimulation(new Genome[] { });
+    }
+
+    void NewSimulation(Genome[] genomes)
     {
         rnd = new Random(GenomeSeed);
         aiRnd = new Random(AiSeed);
         generationLength = StartingGenerationLength;
-        droids = new List<Droid>(NumDroids);
-        CreateDroids();
-        yield return new WaitForEndOfFrame();
+        droids = CreateDroids();
+        deadDroids = 0;
         var numWeights = droids.First().GetNumberOfWeights();
         genAlg = new Evolver(
             populationSize: NumDroids,
             mutationRate: 0.1f,
             crossoverRate: 0.7f,
             numWeights: numWeights,
+            initialGenes: genomes,
             elitism: 2,
             eliteCopies: 4);
-        PopulateGenomes();
+        InitDroids();
         genLengthX = 1f;
-        RestoreImportList();
         generationStart = Time.time;
+        generationCount = 1;
+        SetGenerationText();
     }
 
-    string Export()
+    void CleanupSimulation()
     {
-        var fittest = genAlg.Population.OrderByDescending(g => g.Fitness).First();
-        var data = fittest.Export();
-        return Convert.ToBase64String(data);
+        droids.ForEach(d => DestroyImmediate(d.transform.parent.gameObject));
     }
 
-    void Import(string data)
+    void SetGenerationText()
     {
-        var genome = Genome.Import(Convert.FromBase64String(data));
-        genAlg.Import(genome);
+        GenerationCountLabel.text = generationCount.ToString("D2");
     }
 
-    void CreateDroids()
+    void SetTimescale(float value)
     {
+        Time.timeScale = value;
+        TimescaleLabel.text = value.ToString("F1");
+    }
+
+    List<Droid> CreateDroids()
+    {
+        var result = new List<Droid>();
         var colors = ColorUtils.GenerateDistinctColors(NumDroids, 0.7f, 1);
         for (var i = 0; i < NumDroids; i++)
         {
             var droid = NewDroid(colors[i]);
-            droids.Add(droid);
+            result.Add(droid);
         }
+        return result;
     }
 
     Droid NewDroid(Color color)
@@ -106,30 +131,30 @@ public class Simulation : MonoBehaviour
         {
             StartCoroutine(NewGeneration());
         }
-        Time.timeScale = TimeScale;
     }
 
     IEnumerator NewGeneration()
     {
-        PlayingField.ClearMarkers();
         var fitness = droids.Select(d => d.JourneyLength).ToArray();
         genAlg.NewGeneration(fitness);
         generationLength = GenerationLength(genLengthX += 0.04f);
         CurrentGenerationLength = generationLength;
+        generationCount++;
+        SetGenerationText();
         generationStart = Time.time + 0.01f;
         deadDroids = 0;
-        PopulateGenomes();
+        InitDroids();
         yield return new WaitForEndOfFrame();
     }
 
-    void PopulateGenomes()
+    void InitDroids()
     {
         for (var i = 0; i < droids.Count; i++)
         {
             droids[i].PutWeights(genAlg.Population[i]);
+            droids[i].Reset();
             droids[i].Direction = Quaternion.AngleAxis(rnd.NextFloat(0f, 360f), Vector3.up) * Vector3.forward;
             droids[i].transform.position = new Vector3(rnd.NextFloat(-2, 2), 0.65f, rnd.NextFloat(-2, 2));
-            droids[i].Reset();
         }
     }
 
@@ -139,34 +164,88 @@ public class Simulation : MonoBehaviour
         return MaxGenerationLength * Mathf.Log10(x) + StartingGenerationLength;
     }
 
-    public void OnExportClick()
+    public void OnSaveClick()
     {
-        var dataName = DateTime.Now.ToString("M-d HH:mm:ss");
-        var data = Export();
-        PlayerPrefs.SetString(dataName, data);
-        ImportList.AddOptions(new List<string> { dataName });
-
-        // Stash names in a comma separated string
-        var exported = PlayerPrefs.GetString("exported", "") + dataName + ",";
-        PlayerPrefs.SetString("exported", exported);
+        // Export top fittest half of population
+        var fittest = genAlg.Population.OrderByDescending(g => g.Fitness).Take(NumDroids / 2).ToArray();
+        SaveGenomes(fittest);
     }
 
-    void RestoreImportList()
+    void SaveGenomes(Genome[] fittest)
     {
-        var exportedString = PlayerPrefs.GetString("exported", "");
-        var exported = exportedString.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).ToList();
-        ImportList.ClearOptions();
-        ImportList.AddOptions(exported);
+        var json = JsonConvert.SerializeObject(fittest);
+        var zipped = Zip(json);
+        PlayerPrefs.SetString(savePrefsKey, zipped);
     }
 
-    public void OnImportClick()
+    Genome[] LoadGenomes()
     {
-        var importName = ImportList.options[ImportList.value].text;
-        var data = PlayerPrefs.GetString(importName);
-        if (data == null)
+        var data = PlayerPrefs.GetString(savePrefsKey);
+        var unzipped = Unzip(data);
+        var genomes = JsonConvert.DeserializeObject<Genome[]>(unzipped);
+        return genomes;
+    }
+
+    public void OnTrainClick()
+    {
+        CleanupSimulation();
+        NewSimulation();
+    }
+
+    public void OnPlayClick()
+    {
+        CleanupSimulation();
+        var genomes = LoadGenomes();
+        NewSimulation(genomes);
+    }
+
+    public void OnTimescaleChange(float value)
+    {
+        SetTimescale(value);
+    }
+
+    public static void CopyTo(Stream src, Stream dest)
+    {
+        byte[] bytes = new byte[4096];
+
+        int cnt;
+
+        while ((cnt = src.Read(bytes, 0, bytes.Length)) != 0)
         {
-            throw new Exception("Could not find dataset " + importName);
+            dest.Write(bytes, 0, cnt);
         }
-        //Import(data);
+    }
+
+    public static string Zip(string str)
+    {
+        var bytes = Encoding.UTF8.GetBytes(str);
+
+        using (var msi = new MemoryStream(bytes))
+        using (var mso = new MemoryStream())
+        {
+            using (var gs = new GZipStream(mso, CompressionMode.Compress))
+            {
+                //msi.CopyTo(gs);
+                CopyTo(msi, gs);
+            }
+
+            return Convert.ToBase64String(mso.ToArray());
+        }
+    }
+
+    public static string Unzip(string str)
+    {
+        var bytes = Convert.FromBase64String(str);
+        using (var msi = new MemoryStream(bytes))
+        using (var mso = new MemoryStream())
+        {
+            using (var gs = new GZipStream(msi, CompressionMode.Decompress))
+            {
+                //gs.CopyTo(mso);
+                CopyTo(gs, mso);
+            }
+
+            return Encoding.UTF8.GetString(mso.ToArray());
+        }
     }
 }

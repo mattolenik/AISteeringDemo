@@ -120,17 +120,19 @@ public class Droid : MonoBehaviour
 
         var s = body.velocity.magnitude;
         // Learn stuff
-        inputs[inputs.Length - 2] = FeelerScale;
-        inputs[inputs.Length - 1] = (float.IsNaN(s) || s > 1000 || s < -1000) ? 0f : s;
+        inputs[inputs.Length - 2] = Mathf.Clamp(FeelerScale, 0.375f, 1.875f);
+        inputs[inputs.Length - 1] = Mathf.Clamp(s, -100f, 100f);
         brain.FeedForward(inputs, outputs, Tanh);
 
-        // Outputs ranges from -1 to 1, scale to a range of 0.375 to 1.875
-        FeelerScale = (outputs[2] + 1.5f) * 0.75f;
+        // Outputs ranges from -1 to 1, scale to a range
+        FeelerScale = Mathf.Clamp((outputs[2] + 1.5f) * 0.75f, 0.375f, 1.875f);
         Direction = Quaternion.AngleAxis(outputs[0] * 10f, Vector3.up) * Direction;
 
         // Prevent buildup of momentum by applying less force the faster it moves
         var force = Vector3.ClampMagnitude(Direction * (outputs[1] * Speed), MaxSpeed);
         var corrected = force - body.velocity * body.velocity.magnitude;
+
+        // HACK: prevent invalid force, find a better way to root out runaway input
         if (!float.IsNaN(corrected.magnitude))
         {
             body.AddForce(corrected, ForceMode.Impulse);
@@ -253,6 +255,7 @@ public class Droid : MonoBehaviour
         JourneyLength = 0;
         Lifetime = 0;
         birth = Time.time;
+        hitTriggers.Clear();
         transform.parent.gameObject.SetActive(true);
     }
 
