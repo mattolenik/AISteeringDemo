@@ -3,9 +3,7 @@ using System.Collections;
 using UnityEngine;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
-using System.Text;
 using Newtonsoft.Json;
 using PathfindingLib;
 using UnityEngine.UI;
@@ -48,13 +46,14 @@ public class Simulation : MonoBehaviour
     Random rnd;
     Random aiRnd;
     int generationCount;
-    string savePrefsKey = "saved_population";
+    string saveFilename;
 
     // Generation length function input (i.e. x-axis of its plot)
     float genLengthX;
 
     void Start()
     {
+        saveFilename = Path.Combine(Application.persistentDataPath, "population.json");
         SetTimescale(TimescaleSlider.value);
         NewSimulation();
     }
@@ -174,15 +173,13 @@ public class Simulation : MonoBehaviour
     void SaveGenomes(Genome[] fittest)
     {
         var json = JsonConvert.SerializeObject(fittest);
-        var zipped = Zip(json);
-        PlayerPrefs.SetString(savePrefsKey, zipped);
+        File.WriteAllText(saveFilename, json);
     }
 
     Genome[] LoadGenomes()
     {
-        var data = PlayerPrefs.GetString(savePrefsKey);
-        var unzipped = Unzip(data);
-        var genomes = JsonConvert.DeserializeObject<Genome[]>(unzipped);
+        var json = File.ReadAllText(saveFilename);
+        var genomes = JsonConvert.DeserializeObject<Genome[]>(json);
         return genomes;
     }
 
@@ -202,50 +199,5 @@ public class Simulation : MonoBehaviour
     public void OnTimescaleChange(float value)
     {
         SetTimescale(value);
-    }
-
-    public static void CopyTo(Stream src, Stream dest)
-    {
-        byte[] bytes = new byte[4096];
-
-        int cnt;
-
-        while ((cnt = src.Read(bytes, 0, bytes.Length)) != 0)
-        {
-            dest.Write(bytes, 0, cnt);
-        }
-    }
-
-    public static string Zip(string str)
-    {
-        var bytes = Encoding.UTF8.GetBytes(str);
-
-        using (var msi = new MemoryStream(bytes))
-        using (var mso = new MemoryStream())
-        {
-            using (var gs = new GZipStream(mso, CompressionMode.Compress))
-            {
-                //msi.CopyTo(gs);
-                CopyTo(msi, gs);
-            }
-
-            return Convert.ToBase64String(mso.ToArray());
-        }
-    }
-
-    public static string Unzip(string str)
-    {
-        var bytes = Convert.FromBase64String(str);
-        using (var msi = new MemoryStream(bytes))
-        using (var mso = new MemoryStream())
-        {
-            using (var gs = new GZipStream(msi, CompressionMode.Decompress))
-            {
-                //gs.CopyTo(mso);
-                CopyTo(gs, mso);
-            }
-
-            return Encoding.UTF8.GetString(mso.ToArray());
-        }
     }
 }
