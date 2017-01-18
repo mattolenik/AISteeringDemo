@@ -94,8 +94,9 @@ public class Droid : MonoBehaviour
         dots = Enumerable.Range(0, numFeelers).
             Select(x => Instantiate(DotPrefab, transform.parent).GetComponent<Sprite>()).ToArray();
 
-        // +1 for feeler scale input
+        // #feelers +2 for feeler scale input and velocity
         inputs = new float[numFeelers + 2];
+        // Turning angle, speed, and feeler scale
         outputs = new float[3];
 
         brain = new NeuralNet(

@@ -13,9 +13,13 @@ public class Simulation : MonoBehaviour
 {
     public Text GenerationCountLabel;
 
+    public Text GenerationEtaLabel;
+
     public Text TimescaleLabel;
 
     public Slider TimescaleSlider;
+
+    public TextAsset DemoData;
 
     [Tooltip("Starting generation lifespan in seconds")]
     public float StartingGenerationLength = 8;
@@ -55,7 +59,9 @@ public class Simulation : MonoBehaviour
     {
         saveFilename = Path.Combine(Application.persistentDataPath, "population.json");
         SetTimescale(TimescaleSlider.value);
-        NewSimulation();
+        // Load initial data for demonstration purposes
+        var genomes = DeserializeGenomes(DemoData.text);
+        NewSimulation(genomes);
     }
 
     void NewSimulation()
@@ -93,7 +99,7 @@ public class Simulation : MonoBehaviour
 
     void SetGenerationText()
     {
-        GenerationCountLabel.text = generationCount.ToString("D2");
+        GenerationCountLabel.text = generationCount.ToString("D");
     }
 
     void SetTimescale(float value)
@@ -126,10 +132,13 @@ public class Simulation : MonoBehaviour
 
     void Update()
     {
-        if (Time.time - generationStart > generationLength || deadDroids == NumDroids)
+        var elapsed = Time.time - generationStart;
+        if (elapsed > generationLength || deadDroids == NumDroids)
         {
             StartCoroutine(NewGeneration());
         }
+        // Cast is fine for rough ETA
+        GenerationEtaLabel.text = ((int) (generationLength - elapsed)).ToString("###\\s");
     }
 
     IEnumerator NewGeneration()
@@ -179,8 +188,12 @@ public class Simulation : MonoBehaviour
     Genome[] LoadGenomes()
     {
         var json = File.ReadAllText(saveFilename);
-        var genomes = JsonConvert.DeserializeObject<Genome[]>(json);
-        return genomes;
+        return DeserializeGenomes(json);
+    }
+
+    Genome[] DeserializeGenomes(string json)
+    {
+        return JsonConvert.DeserializeObject<Genome[]>(json);
     }
 
     public void OnTrainClick()
