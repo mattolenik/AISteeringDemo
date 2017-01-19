@@ -53,8 +53,9 @@ public class Simulation : MonoBehaviour
     // Generation length function input (i.e. x-axis of its plot)
     float genLengthX;
 
-    void Start()
+    IEnumerator Start()
     {
+        yield return new WaitForSeconds(3);
         saveFilename = Path.Combine(Application.persistentDataPath, "population.json");
         SetTimescale(TimescaleSlider.value);
         aiRnd = new Random(AiSeed);
