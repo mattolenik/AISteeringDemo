@@ -66,9 +66,10 @@ public class Droid : MonoBehaviour
     Color color;
     int obstacleLayer;
     int trackingLayer;
-    Tuple<float, float>[] feelers;
+    // Array of pairs (float[2]) of feeler [angle,length]
+    float[][] feelers;
     RaycastHit[] feelerHits;
-    HashSet<Collider> hitTriggers;
+    HashSet<GameObject> hitTriggers;
     Sprite[] dots;
 
     void Awake()
@@ -84,9 +85,9 @@ public class Droid : MonoBehaviour
         obstacleLayer = LayerMask.NameToLayer("Obstacles");
         trackingLayer = LayerMask.NameToLayer("Tracking");
         body = GetComponent<Rigidbody>();
-        hitTriggers = new HashSet<Collider>();
+        hitTriggers = new HashSet<GameObject>();
 
-        feelers = GetFeelerParams().ToArray();
+        feelers = GetFeelerParams();
         var numFeelers = feelers.Length;
         feelerHits = Enumerable.Repeat(default(RaycastHit), numFeelers).ToArray();
 
@@ -122,7 +123,7 @@ public class Droid : MonoBehaviour
         var s = body.velocity.magnitude;
         // Learn stuff
         inputs[inputs.Length - 2] = Mathf.Clamp(FeelerScale, 0.375f, 1.875f);
-        inputs[inputs.Length - 1] = Mathf.Clamp(s, -100f, 100f);
+        inputs[inputs.Length - 1] = Mathf.Clamp(body.velocity.magnitude, -100f, 100f);
         brain.FeedForward(inputs, outputs, Tanh);
 
         // Outputs ranges from -1 to 1, scale to a range
@@ -162,8 +163,8 @@ public class Droid : MonoBehaviour
         RaycastHit hit;
         for (var i = 0; i < feelers.Length; i++)
         {
-            angle = feelers[i].First;
-            length = feelers[i].Second * FeelerScale;
+            angle = feelers[i][0];
+            length = feelers[i][1] * FeelerScale;
             v = Quaternion.AngleAxis(angle, Vector3.up) * body.velocity.normalized;
             if (Physics.Raycast(body.position, v, out hit, length, 1 << obstacleLayer))
             {
@@ -185,8 +186,8 @@ public class Droid : MonoBehaviour
         if (other.gameObject.layer != trackingLayer || !gameObject.activeSelf) { return; }
 
         // Ignore if the trigger was hit while moving backwards, or if already hit
-        if (hitTriggers.Add(other) &&
-            Vector3.Dot(Direction, other.gameObject.transform.position - transform.position) < 0)
+        if (hitTriggers.Add(other.gameObject) &&
+            Vector3.Dot(Direction, other.gameObject.transform.position - transform.position) < 0f)
         {
             JourneyLength++;
         }
@@ -203,7 +204,7 @@ public class Droid : MonoBehaviour
 
     public void PutWeights(Genome genome)
     {
-        brain.PutWeights(genome.ToList());
+        brain.PutWeights(genome.Weights);
     }
 
     public int GetNumberOfWeights()
@@ -211,18 +212,19 @@ public class Droid : MonoBehaviour
         return brain.GetWeights().Count;
     }
 
-    public List<Tuple<float, float>> GetFeelerParams()
+    public float[][] GetFeelerParams()
     {
-        var result = new List<Tuple<float, float>>();
+        // This comes from the editor, assuming correct input is OK
         var pairs = Feelers.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-        foreach (var pair in pairs)
+        var results = new float[pairs.Length][];
+        for (var i = 0; i < pairs.Length; i++)
         {
-            var parts = pair.Split(',');
+            var parts = pairs[i].Split(',');
             var angle = float.Parse(parts[0]);
             var length = float.Parse(parts[1]);
-            result.Add(Tuple.New(angle, length));
+            results[i] = new float[] { angle, length };
         }
-        return result;
+        return results;
     }
 
     public void SetColor(Color c)

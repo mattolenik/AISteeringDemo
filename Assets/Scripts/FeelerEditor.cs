@@ -1,12 +1,10 @@
 ﻿using UnityEngine;
-using System.Collections;
-using System.Collections.Generic;
 
 // Quick n dirty extension for the editor to display feeler vectors
 [ExecuteInEditMode]
 public class FeelerEditor : MonoBehaviour
 {
-    List<Tuple<float, float>> feelerParams;
+    float[][] feelerParams;
 
     void Update()
     {
@@ -16,8 +14,8 @@ public class FeelerEditor : MonoBehaviour
         var pos = tform.position;
         foreach (var p in feelerParams)
         {
-            var angle = p.First;
-            var distance = p.Second;
+            var angle = p[0];
+            var distance = p[1];
             var f = Quaternion.AngleAxis(angle, tform.up) * (tform.forward * distance);
             Debug.DrawLine(pos, f * t.FeelerScale);
         }

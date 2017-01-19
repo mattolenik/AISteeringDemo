@@ -3,8 +3,6 @@ using System.Collections;
 using UnityEngine;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using Newtonsoft.Json;
 using PathfindingLib;
 using UnityEngine.UI;
 using Random = System.Random;
@@ -44,13 +42,13 @@ public class Simulation : MonoBehaviour
 
     float generationStart = -1f;
     float generationLength;
-    List<Droid> droids;
+    Droid[] droids;
     Evolver genAlg;
     int deadDroids;
-    Random rnd;
-    Random aiRnd;
     int generationCount;
     string saveFilename;
+    Random rnd;
+    Random aiRnd;
 
     // Generation length function input (i.e. x-axis of its plot)
     float genLengthX;
@@ -59,42 +57,47 @@ public class Simulation : MonoBehaviour
     {
         saveFilename = Path.Combine(Application.persistentDataPath, "population.json");
         SetTimescale(TimescaleSlider.value);
-        // Load initial data for demonstration purposes
-        var genomes = DeserializeGenomes(DemoData.text);
-        NewSimulation(genomes);
-    }
-
-    void NewSimulation()
-    {
-        NewSimulation(new Genome[] { });
-    }
-
-    void NewSimulation(Genome[] genomes)
-    {
-        rnd = new Random(GenomeSeed);
         aiRnd = new Random(AiSeed);
-        generationLength = StartingGenerationLength;
-        droids = CreateDroids();
+        rnd = new Random(GenomeSeed);
+        // Load initial data for demonstration purposes
+        var data = LoadGenomes();
+        NewSimulation(data);
+    }
+
+    GenerationRecord DefaultData()
+    {
+        return new GenerationRecord(new Genome[] { }, 1, StartingGenerationLength);
+    }
+
+    void NewSimulation(GenerationRecord data)
+    {
+        // Increment random seed so that each new run is not identical,
+        // but still provides determinism, and increased variety.
+        generationLength = data.GenLength;
+        droids = CreateDroids(NumDroids);
         deadDroids = 0;
-        var numWeights = droids.First().GetNumberOfWeights();
+        var numWeights = droids[0].GetNumberOfWeights();
         genAlg = new Evolver(
             populationSize: NumDroids,
             mutationRate: 0.1f,
             crossoverRate: 0.7f,
             numWeights: numWeights,
-            initialGenes: genomes,
+            initialGenes: data.Genomes,
             elitism: 2,
             eliteCopies: 4);
         InitDroids();
         genLengthX = 1f;
         generationStart = Time.time;
-        generationCount = 1;
+        generationCount = data.GenCount;
         SetGenerationText();
     }
 
     void CleanupSimulation()
     {
-        droids.ForEach(d => DestroyImmediate(d.transform.parent.gameObject));
+        for (var i = 0; i < droids.Length; i++)
+        {
+            DestroyImmediate(droids[i].transform.parent.gameObject);
+        }
     }
 
     void SetGenerationText()
@@ -108,14 +111,13 @@ public class Simulation : MonoBehaviour
         TimescaleLabel.text = value.ToString("F1");
     }
 
-    List<Droid> CreateDroids()
+    Droid[] CreateDroids(int num)
     {
-        var result = new List<Droid>();
-        var colors = ColorUtils.GenerateDistinctColors(NumDroids, 0.7f, 1);
-        for (var i = 0; i < NumDroids; i++)
+        var result = new Droid[num];
+        var colors = ColorUtils.GenerateDistinctColors(num, 0.7f, 1);
+        for (var i = 0; i < num; i++)
         {
-            var droid = NewDroid(colors[i]);
-            result.Add(droid);
+            result[i] = NewDroid(colors[i]);
         }
         return result;
     }
@@ -143,7 +145,7 @@ public class Simulation : MonoBehaviour
 
     IEnumerator NewGeneration()
     {
-        var fitness = droids.Select(d => d.JourneyLength).ToArray();
+        var fitness = SelectFitnessValues(droids);
         genAlg.NewGeneration(fitness);
         generationLength = GenerationLength(genLengthX += 0.04f);
         CurrentGenerationLength = generationLength;
@@ -155,9 +157,19 @@ public class Simulation : MonoBehaviour
         yield return new WaitForEndOfFrame();
     }
 
+    float[] SelectFitnessValues(IList<Droid> d)
+    {
+        var result = new float[d.Count];
+        for (var i = 0; i < d.Count; i++)
+        {
+            result[i] = d[i].JourneyLength;
+        }
+        return result;
+    }
+
     void InitDroids()
     {
-        for (var i = 0; i < droids.Count; i++)
+        for (var i = 0; i < droids.Length; i++)
         {
             droids[i].PutWeights(genAlg.Population[i]);
             droids[i].Reset();
@@ -175,42 +187,59 @@ public class Simulation : MonoBehaviour
     public void OnSaveClick()
     {
         // Export top fittest half of population
-        var fittest = genAlg.Population.OrderByDescending(g => g.Fitness).Take(NumDroids / 2).ToArray();
-        SaveGenomes(fittest);
+        var fittest = Arrays.FindBest(genAlg.Population, NumDroids / 2, (a, b) => a.Fitness.CompareTo(b.Fitness));
+        SaveGenomes(fittest, generationCount, generationLength);
     }
 
-    void SaveGenomes(Genome[] fittest)
+    void SaveGenomes(Genome[] fittest, int generation, float length)
     {
-        var json = JsonConvert.SerializeObject(fittest);
+        var json = JsonUtility.ToJson(new GenerationRecord(fittest, generation, length));
         File.WriteAllText(saveFilename, json);
     }
 
-    Genome[] LoadGenomes()
+    GenerationRecord LoadGenomes()
     {
-        var json = File.ReadAllText(saveFilename);
-        return DeserializeGenomes(json);
-    }
-
-    Genome[] DeserializeGenomes(string json)
-    {
-        return JsonConvert.DeserializeObject<Genome[]>(json);
+        var json = File.Exists(saveFilename) ? File.ReadAllText(saveFilename) : DemoData.text;
+        var record = JsonUtility.FromJson<GenerationRecord>(json);
+        return record == null || record.Genomes == null ? DefaultData() : record;
     }
 
     public void OnTrainClick()
     {
         CleanupSimulation();
-        NewSimulation();
+        NewSimulation(DefaultData());
     }
 
     public void OnPlayClick()
     {
         CleanupSimulation();
-        var genomes = LoadGenomes();
-        NewSimulation(genomes);
+        var data = LoadGenomes();
+        if(data == null)
+        {
+            Debug.Log("No saved data");
+            return;
+        }
+        NewSimulation(data);
     }
 
     public void OnTimescaleChange(float value)
     {
         SetTimescale(value);
+    }
+
+    // Record for JSON serialization
+    [Serializable]
+    class GenerationRecord
+    {
+        public Genome[] Genomes;
+        public int GenCount;
+        public float GenLength;
+
+        public GenerationRecord(Genome[] genomes, int count, float length)
+        {
+            Genomes = genomes;
+            GenCount = count;
+            GenLength = length;
+        }
     }
 }
