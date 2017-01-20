@@ -94,7 +94,7 @@ public class Simulation : MonoBehaviour
     {
         for (var i = 0; i < Droids.Length; i++)
         {
-            DestroyImmediate(Droids[i].transform.parent.gameObject);
+            Droids[i].transform.parent.gameObject.SetActive(false);
         }
     }
 
