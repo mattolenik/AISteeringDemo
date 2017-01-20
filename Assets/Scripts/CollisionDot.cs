@@ -1,7 +1,7 @@
 ﻿using System.Collections;
 using UnityEngine;
 
-public class Sprite : MonoBehaviour
+public class CollisionDot : MonoBehaviour
 {
     public float Lifespan;
     public Shader LineShader;

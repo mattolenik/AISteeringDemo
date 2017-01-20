@@ -8,7 +8,7 @@ public class RotateGameObject : MonoBehaviour
     public float rot_speed_z = 0;
     public bool local = false;
 
-    void FixedUpdate()
+    void Update()
     {
         if (local)
         {

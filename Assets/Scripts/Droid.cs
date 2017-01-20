@@ -57,20 +57,21 @@ public class Droid : MonoBehaviour
     /// </summary>
     public Random Random { get; set; }
 
+    public Color Color;
+
     Rigidbody body;
     Transform head;
     NeuralNet brain;
     float[] inputs;
     float[] outputs;
     float birth;
-    Color color;
     int obstacleLayer;
     int trackingLayer;
     // Array of pairs (float[2]) of feeler [angle,length]
     float[][] feelers;
     RaycastHit[] feelerHits;
     HashSet<GameObject> hitTriggers;
-    Sprite[] dots;
+    CollisionDot[] dots;
 
     void Awake()
     {
@@ -86,14 +87,11 @@ public class Droid : MonoBehaviour
         trackingLayer = LayerMask.NameToLayer("Tracking");
         body = GetComponent<Rigidbody>();
         hitTriggers = new HashSet<GameObject>();
+        dots = transform.parent.GetComponentsInChildren<CollisionDot>(true);
 
         feelers = GetFeelerParams();
         var numFeelers = feelers.Length;
         feelerHits = Enumerable.Repeat(default(RaycastHit), numFeelers).ToArray();
-
-        // Create display dot sprites for hits
-        dots = Enumerable.Range(0, numFeelers).
-            Select(x => Instantiate(DotPrefab, transform.parent).GetComponent<Sprite>()).ToArray();
 
         // #feelers +2 for feeler scale input and velocity
         inputs = new float[numFeelers + 2];
@@ -110,6 +108,7 @@ public class Droid : MonoBehaviour
 
     void Start()
     {
+        SetRendererColors();
         birth = Time.time;
     }
 
@@ -140,20 +139,6 @@ public class Droid : MonoBehaviour
             body.AddForce(corrected, ForceMode.Impulse);
         }
         CastFeelers();
-    }
-
-    void OnDrawGizmos()
-    {
-        if (!Debug.isDebugBuild) { return; }
-        Gizmos.color = color;
-        foreach (var hit in feelerHits ?? new RaycastHit[] { })
-        {
-            if (hit.collider != null)
-            {
-                Gizmos.DrawSphere(hit.point, 0.1f);
-                Debug.DrawLine(body.position, hit.point, color);
-            }
-        }
     }
 
     void CastFeelers()
@@ -215,7 +200,7 @@ public class Droid : MonoBehaviour
     public float[][] GetFeelerParams()
     {
         // This comes from the editor, assuming correct input is OK
-        var pairs = Feelers.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+        var pairs = ParseFeelerDefinition(Feelers);
         var results = new float[pairs.Length][];
         for (var i = 0; i < pairs.Length; i++)
         {
@@ -227,29 +212,37 @@ public class Droid : MonoBehaviour
         return results;
     }
 
-    public void SetColor(Color c)
+    public int GetFeelerCount()
     {
-        color = c;
+        return ParseFeelerDefinition(Feelers).Length;
+    }
 
+    public string[] ParseFeelerDefinition(string text)
+    {
+        return text.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+    }
+
+    void SetRendererColors()
+    {
         // Include renderer for the head, which is a sibling object
         var renderers = transform.parent.GetComponentsInChildren<Renderer>();
         foreach (var r in renderers)
         {
             foreach (var m in r.materials)
             {
-                if (m.shader == TintShader)
+                if (m != null && m.shader == TintShader)
                 {
-                    m.color = color;
+                    m.color = Color;
                 }
                 else if (r is TrailRenderer)
                 {
-                    m.color = color * 2f;
+                    m.color = Color * 2f;
                 }
             }
         }
         foreach (var d in dots)
         {
-            d.SetColor(c);
+            d.SetColor(Color);
         }
     }
 

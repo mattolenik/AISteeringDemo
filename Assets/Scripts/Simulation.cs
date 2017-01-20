@@ -32,7 +32,7 @@ public class Simulation : MonoBehaviour
 
     public PlayingField PlayingField;
 
-    public int NumDroids = 20;
+    public Transform DroidParent;
 
     [Tooltip("Random seed used by genetic algorithm")]
     public int GenomeSeed = 2;
@@ -40,25 +40,24 @@ public class Simulation : MonoBehaviour
     [Tooltip("Random seed used by neural network")]
     public int AiSeed = 10;
 
+    public Droid[] Droids { get; private set; }
+
     float generationStart = -1f;
     float generationLength;
-    Droid[] droids;
     Evolver genAlg;
     int deadDroids;
     int generationCount;
     string saveFilename;
     Random rnd;
-    Random aiRnd;
 
     // Generation length function input (i.e. x-axis of its plot)
     float genLengthX;
 
-    IEnumerator Start()
+    void Start()
     {
-        yield return new WaitForSeconds(3);
         saveFilename = Path.Combine(Application.persistentDataPath, "population.json");
         SetTimescale(TimescaleSlider.value);
-        aiRnd = new Random(AiSeed);
+        Droids = DroidParent.GetComponentsInChildren<Droid>();
         rnd = new Random(GenomeSeed);
         // Load initial data for demonstration purposes
         var data = LoadGenomes();
@@ -75,29 +74,27 @@ public class Simulation : MonoBehaviour
         // Increment random seed so that each new run is not identical,
         // but still provides determinism, and increased variety.
         generationLength = data.GenLength;
-        droids = CreateDroids(NumDroids);
-        deadDroids = 0;
-        var numWeights = droids[0].GetNumberOfWeights();
+        var numWeights = Droids[0].GetNumberOfWeights();
         genAlg = new Evolver(
-            populationSize: NumDroids,
+            populationSize: Droids.Length,
             mutationRate: 0.1f,
             crossoverRate: 0.7f,
             numWeights: numWeights,
             initialGenes: data.Genomes,
             elitism: 2,
             eliteCopies: 4);
-        InitDroids();
         genLengthX = 1f;
         generationStart = Time.time;
         generationCount = data.GenCount;
         SetGenerationText();
+        ResetDroids();
     }
 
     void CleanupSimulation()
     {
-        for (var i = 0; i < droids.Length; i++)
+        for (var i = 0; i < Droids.Length; i++)
         {
-            DestroyImmediate(droids[i].transform.parent.gameObject);
+            DestroyImmediate(Droids[i].transform.parent.gameObject);
         }
     }
 
@@ -112,50 +109,27 @@ public class Simulation : MonoBehaviour
         TimescaleLabel.text = value.ToString("F1");
     }
 
-    Droid[] CreateDroids(int num)
-    {
-        var result = new Droid[num];
-        var colors = ColorUtils.GenerateDistinctColors(num, 0.7f, 1);
-        for (var i = 0; i < num; i++)
-        {
-            result[i] = NewDroid(colors[i]);
-        }
-        return result;
-    }
-
-    Droid NewDroid(Color color)
-    {
-        var obj = Instantiate(DroidPrefab);
-        var droid = obj.GetComponentInChildren<Droid>();
-        droid.OnDeath += (sender, args) => deadDroids++;
-        droid.SetColor(color);
-        droid.Random = aiRnd;
-        return droid;
-    }
-
     void Update()
     {
         var elapsed = Time.time - generationStart;
-        if (elapsed > generationLength || deadDroids == NumDroids)
+        if (elapsed > generationLength || deadDroids == Droids.Length)
         {
-            StartCoroutine(NewGeneration());
+            NewGeneration();
         }
         // Cast is fine for rough ETA
-        GenerationEtaLabel.text = ((int) (generationLength - elapsed)).ToString("###\\s");
+        GenerationEtaLabel.text = ((int)(generationLength - elapsed)).ToString("###\\s");
     }
 
-    IEnumerator NewGeneration()
+    void NewGeneration()
     {
-        var fitness = SelectFitnessValues(droids);
+        var fitness = SelectFitnessValues(Droids);
         genAlg.NewGeneration(fitness);
         generationLength = GenerationLength(genLengthX += 0.04f);
         CurrentGenerationLength = generationLength;
         generationCount++;
         SetGenerationText();
         generationStart = Time.time + 0.01f;
-        deadDroids = 0;
-        InitDroids();
-        yield return new WaitForEndOfFrame();
+        ResetDroids();
     }
 
     float[] SelectFitnessValues(IList<Droid> d)
@@ -168,14 +142,15 @@ public class Simulation : MonoBehaviour
         return result;
     }
 
-    void InitDroids()
+    void ResetDroids()
     {
-        for (var i = 0; i < droids.Length; i++)
+        deadDroids = 0;
+        for (var i = 0; i < Droids.Length; i++)
         {
-            droids[i].PutWeights(genAlg.Population[i]);
-            droids[i].Reset();
-            droids[i].Direction = Quaternion.AngleAxis(rnd.NextFloat(0f, 360f), Vector3.up) * Vector3.forward;
-            droids[i].transform.position = new Vector3(rnd.NextFloat(-2, 2), 0.65f, rnd.NextFloat(-2, 2));
+            Droids[i].PutWeights(genAlg.Population[i]);
+            Droids[i].Reset();
+            Droids[i].Direction = Quaternion.AngleAxis(rnd.NextFloat(0f, 360f), Vector3.up) * Vector3.forward;
+            Droids[i].transform.position = new Vector3(rnd.NextFloat(-2, 2), 0.65f, rnd.NextFloat(-2, 2));
         }
     }
 
@@ -188,7 +163,7 @@ public class Simulation : MonoBehaviour
     public void OnSaveClick()
     {
         // Export top fittest half of population
-        var fittest = Arrays.FindBest(genAlg.Population, NumDroids / 2, (a, b) => a.Fitness.CompareTo(b.Fitness));
+        var fittest = Arrays.FindBest(genAlg.Population, Droids.Length / 2, (a, b) => a.Fitness.CompareTo(b.Fitness));
         SaveGenomes(fittest, generationCount, generationLength);
     }
 
@@ -226,6 +201,11 @@ public class Simulation : MonoBehaviour
     public void OnTimescaleChange(float value)
     {
         SetTimescale(value);
+    }
+
+    public void OnDroidDeath(object sender, EventArgs args)
+    {
+        deadDroids++;
     }
 
     // Record for JSON serialization
