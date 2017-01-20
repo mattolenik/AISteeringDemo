@@ -74,6 +74,7 @@ public class Simulation : MonoBehaviour
         // Increment random seed so that each new run is not identical,
         // but still provides determinism, and increased variety.
         generationLength = data.GenLength;
+        InitDroids();
         var numWeights = Droids[0].GetNumberOfWeights();
         genAlg = new Evolver(
             populationSize: Droids.Length,
@@ -87,7 +88,7 @@ public class Simulation : MonoBehaviour
         generationStart = Time.time;
         generationCount = data.GenCount;
         SetGenerationText();
-        ResetDroids();
+        DroidEpoch();
     }
 
     void CleanupSimulation()
@@ -118,6 +119,7 @@ public class Simulation : MonoBehaviour
         }
         // Cast is fine for rough ETA
         GenerationEtaLabel.text = ((int)(generationLength - elapsed)).ToString("###\\s");
+
     }
 
     void NewGeneration()
@@ -129,7 +131,7 @@ public class Simulation : MonoBehaviour
         generationCount++;
         SetGenerationText();
         generationStart = Time.time + 0.01f;
-        ResetDroids();
+        DroidEpoch();
     }
 
     float[] SelectFitnessValues(IList<Droid> d)
@@ -142,13 +144,22 @@ public class Simulation : MonoBehaviour
         return result;
     }
 
-    void ResetDroids()
+    void InitDroids()
     {
         deadDroids = 0;
-        for (var i = 0; i < Droids.Length; i++)
+        foreach(var droid in Droids)
+        {
+            droid.Init();
+        }
+    }
+
+    void DroidEpoch()
+    {
+        deadDroids = 0;
+        for(var i = 0; i < Droids.Length; i++)
         {
             Droids[i].PutWeights(genAlg.Population[i]);
-            Droids[i].Reset();
+            Droids[i].Epoch();
             Droids[i].Direction = Quaternion.AngleAxis(rnd.NextFloat(0f, 360f), Vector3.up) * Vector3.forward;
             Droids[i].transform.position = new Vector3(rnd.NextFloat(-2, 2), 0.65f, rnd.NextFloat(-2, 2));
         }

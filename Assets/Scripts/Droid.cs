@@ -73,7 +73,7 @@ public class Droid : MonoBehaviour
     HashSet<GameObject> hitTriggers;
     CollisionDot[] dots;
 
-    void Awake()
+    public void Init()
     {
         foreach (Transform tform in transform.parent.transform)
         {
@@ -88,28 +88,29 @@ public class Droid : MonoBehaviour
         body = GetComponent<Rigidbody>();
         hitTriggers = new HashSet<GameObject>();
         dots = transform.parent.GetComponentsInChildren<CollisionDot>(true);
-
         feelers = GetFeelerParams();
         var numFeelers = feelers.Length;
         feelerHits = Enumerable.Repeat(default(RaycastHit), numFeelers).ToArray();
-
         // #feelers +2 for feeler scale input and velocity
         inputs = new float[numFeelers + 2];
         // Turning angle, speed, and feeler scale
         outputs = new float[3];
-
         brain = new NeuralNet(
             numInputs: inputs.Length,
             numOutputs: outputs.Length,
             numHiddenLayers: 2,
             neuronsPerHiddenLayer: inputs.Length + outputs.Length,
             bias: -1);
+        SetRendererColors();
+        Epoch();
+    }
+
+    void Awake()
+    {
     }
 
     void Start()
     {
-        SetRendererColors();
-        birth = Time.time;
     }
 
     void FixedUpdate()
@@ -246,7 +247,7 @@ public class Droid : MonoBehaviour
         }
     }
 
-    public void Reset()
+    public void Epoch()
     {
         JourneyLength = 0;
         Lifetime = 0;
