@@ -160,6 +160,8 @@ public class Simulation : MonoBehaviour
         {
             Droids[i].PutWeights(genAlg.Population[i]);
             Droids[i].Epoch();
+            Droids[i].Body.velocity = Vector3.zero;
+            Droids[i].Body.velocity = Vector3.zero;
             Droids[i].Direction = Quaternion.AngleAxis(rnd.NextFloat(0f, 360f), Vector3.up) * Vector3.forward;
             Droids[i].transform.position = new Vector3(rnd.NextFloat(-2, 2), 0.65f, rnd.NextFloat(-2, 2));
         }

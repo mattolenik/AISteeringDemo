@@ -45,7 +45,7 @@ public class Droid : MonoBehaviour
     /// <summary>
     /// How much unique ground has been covered
     /// </summary>
-    public float JourneyLength { get; private set; }
+    public float JourneyLength;
 
     /// <summary>
     /// Occurs on death
@@ -59,7 +59,8 @@ public class Droid : MonoBehaviour
 
     public Color Color;
 
-    Rigidbody body;
+    public Rigidbody Body { get; private set; }
+
     Transform head;
     NeuralNet brain;
     float[] inputs;
@@ -85,7 +86,7 @@ public class Droid : MonoBehaviour
         }
         obstacleLayer = LayerMask.NameToLayer("Obstacles");
         trackingLayer = LayerMask.NameToLayer("Tracking");
-        body = GetComponent<Rigidbody>();
+        Body = GetComponent<Rigidbody>();
         hitTriggers = new HashSet<GameObject>();
         dots = transform.parent.GetComponentsInChildren<CollisionDot>(true);
         feelers = GetFeelerParams();
@@ -120,10 +121,10 @@ public class Droid : MonoBehaviour
         var angle = Vector3.Dot(head.transform.right, Direction) * (Mathf.Rad2Deg * Time.fixedDeltaTime * 12f);
         head.rotation *= Quaternion.AngleAxis(angle, Vector3.forward);
 
-        var s = body.velocity.magnitude;
+        var s = Body.velocity.magnitude;
         // Learn stuff
         inputs[inputs.Length - 2] = Mathf.Clamp(FeelerScale, 0.375f, 1.875f);
-        inputs[inputs.Length - 1] = Mathf.Clamp(body.velocity.magnitude, -100f, 100f);
+        inputs[inputs.Length - 1] = Mathf.Clamp(Body.velocity.magnitude, -100f, 100f);
         brain.FeedForward(inputs, outputs, Tanh);
 
         // Outputs ranges from -1 to 1, scale to a range
@@ -132,12 +133,12 @@ public class Droid : MonoBehaviour
 
         // Prevent buildup of momentum by applying less force the faster it moves
         var force = Vector3.ClampMagnitude(Direction * (outputs[1] * Speed), MaxSpeed);
-        var corrected = force - body.velocity * body.velocity.magnitude;
+        var corrected = force - Body.velocity * Body.velocity.magnitude;
 
         // HACK: prevent invalid force, find a better way to root out runaway input
         if (!float.IsNaN(corrected.magnitude))
         {
-            body.AddForce(corrected, ForceMode.Impulse);
+            Body.AddForce(corrected, ForceMode.Impulse);
         }
         CastFeelers();
     }
@@ -151,8 +152,8 @@ public class Droid : MonoBehaviour
         {
             angle = feelers[i][0];
             length = feelers[i][1] * FeelerScale;
-            v = Quaternion.AngleAxis(angle, Vector3.up) * body.velocity.normalized;
-            if (Physics.Raycast(body.position, v, out hit, length, 1 << obstacleLayer))
+            v = Quaternion.AngleAxis(angle, Vector3.up) * Body.velocity.normalized;
+            if (Physics.Raycast(Body.position, v, out hit, length, 1 << obstacleLayer))
             {
                 // Inputs are the distance to any hit, and the full length otherwise
                 inputs[i] = hit.distance;
@@ -185,7 +186,7 @@ public class Droid : MonoBehaviour
         OnDeath(this, new EventArgs());
         transform.parent.gameObject.SetActive(false);
         Lifetime = Time.time - birth;
-        ImpactSpeed = body.velocity.magnitude;
+        ImpactSpeed = Body.velocity.magnitude;
     }
 
     public void PutWeights(Genome genome)
