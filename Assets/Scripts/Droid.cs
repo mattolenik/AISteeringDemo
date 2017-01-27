@@ -74,6 +74,7 @@ public class Droid : MonoBehaviour
     HashSet<GameObject> hitTriggers;
     CollisionDot[] dots;
 
+    // Avoid Unity startup events and let Simulation control the lifecycle
     public void Init()
     {
         foreach (Transform tform in transform.parent.transform)
@@ -106,13 +107,6 @@ public class Droid : MonoBehaviour
         Epoch();
     }
 
-    void Awake()
-    {
-    }
-
-    void Start()
-    {
-    }
 
     void FixedUpdate()
     {
@@ -121,7 +115,6 @@ public class Droid : MonoBehaviour
         var angle = Vector3.Dot(head.transform.right, Direction) * (Mathf.Rad2Deg * Time.fixedDeltaTime * 12f);
         head.rotation *= Quaternion.AngleAxis(angle, Vector3.forward);
 
-        var s = Body.velocity.magnitude;
         // Learn stuff
         inputs[inputs.Length - 2] = Mathf.Clamp(FeelerScale, 0.375f, 1.875f);
         inputs[inputs.Length - 1] = Mathf.Clamp(Body.velocity.magnitude, -100f, 100f);
@@ -132,38 +125,37 @@ public class Droid : MonoBehaviour
         Direction = Quaternion.AngleAxis(outputs[0] * 10f, Vector3.up) * Direction;
 
         // Prevent buildup of momentum by applying less force the faster it moves
+        // HACK: figure out proper math instead of so many vector operations
         var force = Vector3.ClampMagnitude(Direction * (outputs[1] * Speed), MaxSpeed);
-        var corrected = force - Body.velocity * Body.velocity.magnitude;
-
-        // HACK: prevent invalid force, find a better way to root out runaway input
-        if (!float.IsNaN(corrected.magnitude))
-        {
-            Body.AddForce(corrected, ForceMode.Impulse);
-        }
+        var compForce = Vector3.ClampMagnitude(force - Body.velocity * Body.velocity.magnitude, MaxSpeed);
+        Body.AddForce(compForce, ForceMode.Impulse);
         CastFeelers();
     }
 
+
+
     void CastFeelers()
     {
-        float angle, length;
-        Vector3 v;
-        RaycastHit hit;
+        float length;
+        Vector3 cast;
+        RaycastHit castHit;
+        float castAngle;
         for (var i = 0; i < feelers.Length; i++)
         {
-            angle = feelers[i][0];
+            castAngle = feelers[i][0];
             length = feelers[i][1] * FeelerScale;
-            v = Quaternion.AngleAxis(angle, Vector3.up) * Body.velocity.normalized;
-            if (Physics.Raycast(Body.position, v, out hit, length, 1 << obstacleLayer))
+            cast = Quaternion.AngleAxis(castAngle, Vector3.up) * Body.velocity.normalized;
+            if (Physics.Raycast(Body.position, cast, out castHit, length, 1 << obstacleLayer))
             {
                 // Inputs are the distance to any hit, and the full length otherwise
-                inputs[i] = hit.distance;
-                dots[i].Draw(transform.position, hit.point);
+                inputs[i] = castHit.distance;
+                dots[i].Draw(transform.position, castHit.point);
             }
             else
             {
                 inputs[i] = length;
             }
-            feelerHits[i] = hit;
+            feelerHits[i] = castHit;
         }
     }
 
