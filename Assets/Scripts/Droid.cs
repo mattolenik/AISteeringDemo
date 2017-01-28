@@ -132,7 +132,18 @@ public class Droid : MonoBehaviour
         CastFeelers();
     }
 
-
+    void OnDrawGizmos()
+    {
+        if (feelers == null) { return; }
+        Gizmos.color = Color;
+        foreach (var parms in feelers)
+        {
+            var castAngle = parms[0];
+            var length = parms[1] * FeelerScale;
+            var cast = Quaternion.AngleAxis(castAngle, Vector3.up) * Body.velocity.normalized;
+            Debug.DrawLine(Body.position, Body.position + cast * length, Color);
+        }
+    }
 
     void CastFeelers()
     {
